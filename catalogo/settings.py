@@ -86,8 +86,14 @@ else:
 _aws_bucket = config('AWS_STORAGE_BUCKET_NAME', default='')
 
 if _aws_bucket:
-    AWS_ACCESS_KEY_ID = config('AWS_ACCESS_KEY_ID')
-    AWS_SECRET_ACCESS_KEY = config('AWS_SECRET_ACCESS_KEY')
+    # Credenciais opcionais: se não definidas, boto3 usa o EC2 Instance Role automaticamente
+    _aws_key = config('AWS_ACCESS_KEY_ID', default='')
+    _aws_secret = config('AWS_SECRET_ACCESS_KEY', default='')
+    if _aws_key:
+        AWS_ACCESS_KEY_ID = _aws_key
+    if _aws_secret:
+        AWS_SECRET_ACCESS_KEY = _aws_secret
+
     AWS_STORAGE_BUCKET_NAME = _aws_bucket
     AWS_S3_REGION_NAME = config('AWS_S3_REGION_NAME', default='us-east-1')
     AWS_S3_FILE_OVERWRITE = False
