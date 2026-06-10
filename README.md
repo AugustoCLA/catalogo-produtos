@@ -1,7 +1,7 @@
 # Catálogo de Produtos — API REST com Django + AWS Elastic Beanstalk
 
-> **AP1 — Disciplina BDCC_26.1_8001**
-> Deploy em produção: [http://catalogo-produtos-env.eba-5rj9dgp4.us-east-1.elasticbeanstalk.com/api/](http://catalogo-produtos-env.eba-5rj9dgp4.us-east-1.elasticbeanstalk.com/api/)
+> **AP1/AP2 — Disciplina BDCC_26.1_8001**
+> Deploy em producao: [http://catalogo-ap2-env.eba-e2j4yxvh.us-east-1.elasticbeanstalk.com/api/](http://catalogo-ap2-env.eba-e2j4yxvh.us-east-1.elasticbeanstalk.com/api/)
 
 ---
 
@@ -9,7 +9,9 @@
 
 Este projeto foi desenvolvido como entrega da AP1 da disciplina de Cloud Computing. O objetivo é demonstrar a construção de uma API RESTful utilizando Django REST Framework, com modelagem de dados relacional, e o deploy da aplicação na AWS utilizando o serviço Elastic Beanstalk.
 
-A API gerencia um catálogo de produtos categorizados, expondo endpoints para criação, leitura, atualização e remoção de **Categorias** e **Produtos**, com relacionamento entre as duas entidades via chave estrangeira.
+A API gerencia um catalogo de produtos categorizados, expondo endpoints para criacao, leitura, atualizacao e remocao de **Categorias**, **Produtos**, **Pedidos** e **Itens de Pedido**.
+
+Na AP2, o projeto foi evoluido para usar **RDS MySQL** em producao, armazenamento de midia de produtos no **Amazon S3** e novos modelos de pedido para representar um fluxo simples de e-commerce.
 
 ---
 
@@ -18,6 +20,8 @@ A API gerencia um catálogo de produtos categorizados, expondo endpoints para cr
 - Cadastro, listagem, edição e remoção de Categorias
 - Cadastro, listagem, edição e remoção de Produtos
 - Relacionamento entre Produto e Categoria via ForeignKey
+- Upload de imagem de produto com armazenamento em S3 em producao
+- Cadastro e consulta de Pedidos e Itens de Pedido
 - Campo `categoria_nome` exposto no retorno de Produtos para facilitar leitura
 - Interface administrativa via Django Admin (`/admin/`)
 - Healthcheck na raiz da aplicação (`/`)
@@ -34,6 +38,8 @@ A API gerencia um catálogo de produtos categorizados, expondo endpoints para cr
 | Django REST Framework | 3.17.1 | Construção da API REST |
 | Gunicorn | 25.3.0 | Servidor WSGI para produção |
 | SQLite | — | Banco de dados (ambiente local) |
+| MySQL/RDS | — | Banco de dados em producao |
+| Amazon S3 | — | Armazenamento de midia dos produtos |
 | AWS Elastic Beanstalk | — | Plataforma de deploy |
 | AWS EC2 | — | Infraestrutura de servidor (provisionada pelo EB) |
 
@@ -62,7 +68,32 @@ Entidade principal do projeto. Representa um item do catálogo.
 | `descricao` | TextField | Descrição opcional |
 | `preco` | DecimalField | Preço com até 2 casas decimais |
 | `estoque` | IntegerField | Quantidade em estoque |
+| `imagem` | ImageField | Imagem do produto armazenada localmente ou no S3 |
 | `categoria` | ForeignKey | Referência para Categoria |
+
+### Pedido
+
+Entidade adicionada na AP2 para representar uma compra.
+
+| Campo | Tipo | Descricao |
+|---|---|---|
+| `id` | Integer | Chave primaria (auto) |
+| `status` | CharField | Status do pedido |
+| `criado_em` | DateTimeField | Data de criacao |
+| `atualizado_em` | DateTimeField | Data de atualizacao |
+| `total` | DecimalField | Valor total do pedido |
+
+### PedidoItem
+
+Entidade adicionada na AP2 para representar os produtos dentro de um pedido.
+
+| Campo | Tipo | Descricao |
+|---|---|---|
+| `id` | Integer | Chave primaria (auto) |
+| `pedido` | ForeignKey | Referencia para Pedido |
+| `produto` | ForeignKey | Referencia para Produto |
+| `quantidade` | PositiveIntegerField | Quantidade comprada |
+| `preco_unitario` | DecimalField | Preco unitario no momento do pedido |
 
 ### Relacionamento
 
@@ -73,7 +104,7 @@ Entidade principal do projeto. Representa um item do catálogo.
 ## Endpoints da API
 
 Base URL local: `http://127.0.0.1:8000`
-Base URL produção: `http://catalogo-produtos-env.eba-5rj9dgp4.us-east-1.elasticbeanstalk.com`
+Base URL producao: `http://catalogo-ap2-env.eba-e2j4yxvh.us-east-1.elasticbeanstalk.com`
 
 ### Healthcheck
 
@@ -102,6 +133,28 @@ Base URL produção: `http://catalogo-produtos-env.eba-5rj9dgp4.us-east-1.elasti
 | PUT | `/api/produtos/{id}/` | Atualização completa |
 | PATCH | `/api/produtos/{id}/` | Atualização parcial |
 | DELETE | `/api/produtos/{id}/` | Remove o produto |
+
+### Pedidos
+
+| Metodo | Endpoint | Descricao |
+|---|---|---|
+| GET | `/api/pedidos/` | Lista todos os pedidos |
+| POST | `/api/pedidos/` | Cria um novo pedido |
+| GET | `/api/pedidos/{id}/` | Detalhe de um pedido |
+| PUT | `/api/pedidos/{id}/` | Atualizacao completa |
+| PATCH | `/api/pedidos/{id}/` | Atualizacao parcial |
+| DELETE | `/api/pedidos/{id}/` | Remove o pedido |
+
+### Itens de Pedido
+
+| Metodo | Endpoint | Descricao |
+|---|---|---|
+| GET | `/api/pedido-itens/` | Lista todos os itens de pedido |
+| POST | `/api/pedido-itens/` | Cria um novo item de pedido |
+| GET | `/api/pedido-itens/{id}/` | Detalhe de um item |
+| PUT | `/api/pedido-itens/{id}/` | Atualizacao completa |
+| PATCH | `/api/pedido-itens/{id}/` | Atualizacao parcial |
+| DELETE | `/api/pedido-itens/{id}/` | Remove o item |
 
 ### Exemplos de payload
 
@@ -246,7 +299,8 @@ O deploy foi realizado seguindo o fluxo abaixo:
    - `python manage.py migrate --noinput`
    - `python manage.py collectstatic --noinput`
    - Criação do superusuário admin
-6. **Variáveis de ambiente** configuradas no painel do EB: `DJANGO_DEBUG=False`, `DJANGO_SETTINGS_MODULE`, `DJANGO_ALLOWED_HOSTS`
+6. **Variaveis de ambiente** configuradas no painel do EB: `DJANGO_SECRET_KEY`, `DJANGO_DEBUG=False`, `DJANGO_SETTINGS_MODULE`, `DJANGO_ALLOWED_HOSTS`, `DB_HOST`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `AWS_STORAGE_BUCKET_NAME`, `AWS_S3_REGION_NAME`
+7. **Usuario administrador:** criado automaticamente no deploy pelo `.ebextensions/django.config` com username `admin`; a senha deve ser configurada em `DJANGO_ADMIN_PASSWORD` ou cai no valor padrao `admin1234`.
 
 ---
 
@@ -254,11 +308,31 @@ O deploy foi realizado seguindo o fluxo abaixo:
 
 > **A API está no ar e acessível pelo link abaixo:**
 
-**[http://catalogo-produtos-env.eba-5rj9dgp4.us-east-1.elasticbeanstalk.com/api/](http://catalogo-produtos-env.eba-5rj9dgp4.us-east-1.elasticbeanstalk.com/api/)**
+**[http://catalogo-ap2-env.eba-e2j4yxvh.us-east-1.elasticbeanstalk.com/api/](http://catalogo-ap2-env.eba-e2j4yxvh.us-east-1.elasticbeanstalk.com/api/)**
 
 | Endpoint | Link direto |
 |---|---|
-| Raiz da API | [/api/](http://catalogo-produtos-env.eba-5rj9dgp4.us-east-1.elasticbeanstalk.com/api/) |
-| Categorias | [/api/categorias/](http://catalogo-produtos-env.eba-5rj9dgp4.us-east-1.elasticbeanstalk.com/api/categorias/) |
-| Produtos | [/api/produtos/](http://catalogo-produtos-env.eba-5rj9dgp4.us-east-1.elasticbeanstalk.com/api/produtos/) |
-| Admin | [/admin/](http://catalogo-produtos-env.eba-5rj9dgp4.us-east-1.elasticbeanstalk.com/admin/) |
+| Healthcheck | [/](http://catalogo-ap2-env.eba-e2j4yxvh.us-east-1.elasticbeanstalk.com/) |
+| Raiz da API | [/api/](http://catalogo-ap2-env.eba-e2j4yxvh.us-east-1.elasticbeanstalk.com/api/) |
+| Categorias | [/api/categorias/](http://catalogo-ap2-env.eba-e2j4yxvh.us-east-1.elasticbeanstalk.com/api/categorias/) |
+| Produtos | [/api/produtos/](http://catalogo-ap2-env.eba-e2j4yxvh.us-east-1.elasticbeanstalk.com/api/produtos/) |
+| Pedidos | [/api/pedidos/](http://catalogo-ap2-env.eba-e2j4yxvh.us-east-1.elasticbeanstalk.com/api/pedidos/) |
+| Itens de Pedido | [/api/pedido-itens/](http://catalogo-ap2-env.eba-e2j4yxvh.us-east-1.elasticbeanstalk.com/api/pedido-itens/) |
+| Admin | [/admin/](http://catalogo-ap2-env.eba-e2j4yxvh.us-east-1.elasticbeanstalk.com/admin/) |
+
+---
+
+## Evidencias AP2
+
+Validacoes realizadas em producao:
+
+| Requisito | Evidencia |
+|---|---|
+| Elastic Beanstalk funcional | Ambiente `Catalogo-ap2-env` com Health Ok e API respondendo HTTP 200 |
+| RDS MySQL | Aplicacao em producao usando `DB_HOST=ap2-db.core80gmoru4.us-east-1.rds.amazonaws.com` e migrations aplicadas |
+| S3 para midia | Produto `id=1` criado com imagem em `https://ap2-media-augusto.s3.amazonaws.com/produtos/ap2-validacao-produto.png` |
+| Django Admin | `/admin/` acessivel e login do usuario administrador validado |
+| Pedido e item de pedido | Pedido `id=2` e item `id=1` criados pela API |
+| CRUD da API | Categoria temporaria criada, atualizada via PATCH e removida com DELETE 204 |
+
+As evidencias visuais recomendadas para anexar na entrega sao prints do Elastic Beanstalk, RDS, S3, Django Admin e endpoints da API.
